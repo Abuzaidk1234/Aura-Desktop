@@ -1,0 +1,14 @@
+{
+    "wake_words": [
+        "jarvis",
+        "buddy",
+        "computer",
+        "clippy",
+        "sleepy",
+        "creepy"
+    ],
+    "idle_timeout_minutes": 5,
+    "shutdown_buffer_seconds": 10,
+    "energy_threshold": 300,
+    "debounce_cooldown_seconds": 2.0
+}
