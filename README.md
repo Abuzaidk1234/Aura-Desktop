@@ -26,17 +26,15 @@ Inspired by the nostalgia of the original Windows Clippy, Aura takes the concept
 1. **Install Ollama:** Download and install [Ollama](https://ollama.com/), then pull the required model:
    ```bash
    ollama run llama3.2
-Clone the Repository:
+2. **Clone the Repository:**
 
-Bash
-git clone [https://github.com/Abuzaidk1234/Aura-Desktop.git](https://github.com/Abuzaidk1234/Aura-Desktop.git)
-cd Aura-Desktop
-Install Dependencies:
-
-Bash
-pip install pyqt6 PyQt6-WebEngine SpeechRecognition pyaudio psutil keyboard ollama
-Launch the Engine:
-
-Bash
-python main.py
+   ```Bash
+   git clone [https://github.com/Abuzaidk1234/Aura-Desktop.git](https://github.com/Abuzaidk1234/Aura-Desktop.git)
+   cd Aura-Desktop
+3. **Install Dependencies:**
+   ```Bash
+   pip install pyqt6 PyQt6-WebEngine SpeechRecognition pyaudio psutil keyboard ollama
+4. **Launch the Engine:**
+   ```Bash
+   python main.py
 (Note: A one-click Windows installer .exe is planned for future releases once core development is fully finalized.)
