@@ -1,3 +1,4 @@
+copy this template to config.json
 {
   "wake_words": [
     "aura",
