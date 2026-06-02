@@ -12,7 +12,7 @@ DEFAULT_CONFIG = {
     "tts_voice": "en-US-ChristopherNeural",
     "tts_rate": "+15%",
     "avatar_left_margin": 20,
-    "avatar_tray_safe_right_margin": 340,
+    "avatar_tray_safe_right_margin": 270,
     "avatar_bottom_margin": 20,
 }
 

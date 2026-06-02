@@ -1,27 +1,25 @@
-copy this template to config.json
 {
-  "wake_words": [
-    "aura",
-    "Aura",
-    "jarvis",
-    "buddy",
-    "computer",
-    "clippy",
-    "sleepy",
-    "creepy",
-    "ora",
-    "ara",
-    "laura",
-    "are a"
-  ],
-  "idle_timeout_minutes": 5,
-  "shutdown_buffer_seconds": 20,
-  "energy_threshold": 100,
-  "debounce_cooldown_seconds": 2.0,
-  "mic_pause_threshold": 1.8,
-  "tts_voice": "en-US-ChristopherNeural",
-  "tts_rate": "+15%",
-  "avatar_left_margin": 20,
-  "avatar_tray_safe_right_margin": 240,
-  "avatar_bottom_margin": 10
+    "wake_words": [
+        "aura",
+        "jarvis",
+        "buddy",
+        "computer",
+        "clippy",
+        "sleepy",
+        "creepy",
+        "ora",
+        "ara",
+        "laura",
+        "are a"
+    ],
+    "idle_timeout_minutes": 5,
+    "shutdown_buffer_seconds": 20,
+    "energy_threshold": 300,
+    "debounce_cooldown_seconds": 2.0,
+    "mic_pause_threshold": 1.5,
+    "tts_voice": "en-US-ChristopherNeural",
+    "tts_rate": "+15%",
+    "avatar_left_margin": 20,
+    "avatar_tray_safe_right_margin": 270,
+    "avatar_bottom_margin": 20
 }
