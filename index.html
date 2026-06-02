@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>3D Avatar WebGL</title>
+        <title>Aura - Production Ready</title>
         <style>
             body,
             html {
@@ -18,13 +18,9 @@
                 display: block;
                 width: 100%;
                 height: 100%;
-                cursor: grab;
-            }
-            canvas:active {
-                cursor: grabbing;
             }
 
-            /* --- The floating status pill --- */
+            /* --- Smaller, Smoother, and Blurred Status Pill --- */
             #state-overlay {
                 position: absolute;
                 bottom: 20px;
@@ -32,56 +28,68 @@
                 transform: translateX(-50%);
                 font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
                 font-weight: bold;
-                font-size: 14px;
+                font-size: 12px;
                 letter-spacing: 1px;
                 color: white;
-                background: rgba(0, 0, 0, 0.6);
-                padding: 8px 24px;
-                border-radius: 25px;
-                border: 2px solid #555;
+                background: rgba(20, 20, 25, 0.45);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                padding: 6px 18px;
+                border-radius: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.15);
                 transition: all 0.3s ease;
                 pointer-events: none;
                 z-index: 10;
                 text-align: center;
             }
             .idle {
-                border-color: #555;
-                opacity: 0.5;
+                opacity: 0.6;
             }
             .listening {
                 border-color: #00ffcc;
-                box-shadow: 0 0 20px #00ffcc;
+                box-shadow: 0 0 20px rgba(0, 255, 204, 0.6);
                 opacity: 1;
             }
             .thinking {
                 border-color: #b000ff;
-                box-shadow: 0 0 20px #b000ff;
+                box-shadow: 0 0 20px rgba(176, 0, 255, 0.6);
                 opacity: 1;
             }
             .processing {
                 border-color: #ffaa00;
-                box-shadow: 0 0 20px #ffaa00;
+                box-shadow: 0 0 20px rgba(255, 170, 0, 0.6);
                 opacity: 1;
             }
+            .speaking {
+                border-color: #ffaa00;
+                opacity: 1;
+                animation: pulse-border 0.15s infinite alternate;
+            }
 
-            /* --- NEW: The Frosted Chat Bubble --- */
+            @keyframes pulse-border {
+                0% {
+                    box-shadow: 0 0 10px #ffaa00;
+                }
+                100% {
+                    box-shadow: 0 0 30px #ffaa00;
+                }
+            }
+
             #chat-bubble {
                 position: absolute;
-                bottom: 220px; /* Sits right above his head */
+                bottom: 180px;
                 left: 50%;
                 transform: translateX(-50%) translateY(10px);
-                max-width: 250px;
+                max-width: 300px;
+                max-height: 250px;
+                overflow: hidden;
                 padding: 12px 18px;
-                background: rgba(
-                    25,
-                    25,
-                    30,
-                    0.45
-                ); /* Semi-transparent dark base */
-                backdrop-filter: blur(12px); /* Frosted glass effect */
+                background: rgba(20, 20, 25, 0.45);
+                backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
                 border: 1px solid rgba(255, 255, 255, 0.15);
-                border-radius: 16px;
+                border-radius: 20px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
                 color: #ffffff;
                 font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
                 font-size: 13px;
@@ -96,13 +104,67 @@
                     box-shadow 0.4s ease;
                 z-index: 5;
             }
-
-            /* When active, it floats up slightly and gains a slight glow */
             #chat-bubble.visible {
                 opacity: 1;
                 transform: translateX(-50%) translateY(0px);
-                box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
-                border-color: rgba(0, 255, 204, 0.4);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            }
+
+            /* Custom Webkit Scrollbar for Chat Bubble */
+            #chat-bubble::-webkit-scrollbar {
+                width: 6px;
+            }
+            #chat-bubble::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            #chat-bubble::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+            }
+            #chat-bubble::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.4);
+            }
+
+            /* --- Frosted Glass Text Input Box --- */
+            #command-container {
+                position: absolute;
+                bottom: 180px;
+                left: 50%;
+                transform: translateX(-50%) translateY(10px);
+                width: 300px;
+                padding: 10px 18px;
+                background: rgba(20, 20, 25, 0.45);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 20px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+                opacity: 0;
+                pointer-events: none;
+                transition:
+                    opacity 0.3s ease,
+                    transform 0.3s ease,
+                    box-shadow 0.3s ease;
+                z-index: 20;
+            }
+            #command-container.visible {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0px);
+                pointer-events: auto;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            }
+            #command-input {
+                width: 100%;
+                background: transparent;
+                border: none;
+                color: white;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 14px;
+                outline: none;
+                text-align: center;
+            }
+            #command-input::placeholder {
+                color: rgba(255, 255, 255, 0.5);
             }
         </style>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -111,46 +173,213 @@
     </head>
     <body>
         <div id="state-overlay" class="idle">IDLE 🧘</div>
-
         <div id="chat-bubble"></div>
 
+        <div id="command-container">
+            <input
+                type="text"
+                id="command-input"
+                placeholder="Type a command..."
+                autocomplete="off"
+            />
+        </div>
+
         <script>
+            // --- HTML TO PYTHON COMMAND BRIDGE ---
+            window.showTextInput = function () {
+                const container = document.getElementById("command-container");
+                const input = document.getElementById("command-input");
+
+                document
+                    .getElementById("chat-bubble")
+                    .classList.remove("visible");
+
+                container.classList.add("visible");
+                input.value = "";
+                setTimeout(() => input.focus(), 100);
+            };
+
+            window.closeTextInput = function () {
+                document
+                    .getElementById("command-container")
+                    .classList.remove("visible");
+                document.title = "CMD_END:";
+                setTimeout(() => {
+                    document.title = "Aura - Production Ready";
+                }, 100);
+            };
+
+            document
+                .getElementById("command-input")
+                .addEventListener("keydown", function (e) {
+                    if (e.key === "Enter") {
+                        const val = this.value.trim();
+                        if (val) {
+                            document.title = "CMD:" + val;
+                            setTimeout(() => {
+                                document.title = "Aura - Production Ready";
+                            }, 100);
+                        } else {
+                            window.closeTextInput();
+                        }
+                        document
+                            .getElementById("command-container")
+                            .classList.remove("visible");
+                    } else if (e.key === "Escape") {
+                        window.closeTextInput();
+                    }
+                });
+
+            document
+                .getElementById("command-input")
+                .addEventListener("blur", function () {
+                    window.closeTextInput();
+                });
+
+            // --- EXISTING LOGIC ---
+            let stateLight;
+            let targetStateColor = new THREE.Color(0x000000);
+            let targetStateIntensity = 0.0;
+            let currentUIState = "idle";
+
             function setClippyState(state) {
+                currentUIState = state;
                 const overlay = document.getElementById("state-overlay");
                 overlay.classList.remove(
                     "listening",
                     "thinking",
                     "processing",
+                    "speaking",
                     "idle",
                 );
                 overlay.classList.add(state);
-
                 let emoji = "🧘";
-                if (state === "listening") emoji = "👀";
-                if (state === "thinking") emoji = "🤔";
-                if (state === "processing") emoji = "⚙️";
+
+                if (state === "listening") {
+                    emoji = "👀";
+                    targetStateColor.setHex(0x00ffcc);
+                    targetStateIntensity = 0.8;
+                } else if (state === "thinking") {
+                    emoji = "🤔";
+                    targetStateColor.setHex(0xb000ff);
+                    targetStateIntensity = 0.8;
+                } else if (state === "processing") {
+                    emoji = "⚙️";
+                    targetStateColor.setHex(0xffaa00);
+                    targetStateIntensity = 0.8;
+                } else if (state === "speaking") {
+                    emoji = "💬";
+                    targetStateColor.setHex(0xffaa00);
+                    targetStateIntensity = 1.3;
+                } else {
+                    targetStateIntensity = 0.0;
+                }
 
                 overlay.innerText = state.toUpperCase() + " " + emoji;
             }
 
-            // --- NEW: Chat Bubble Controller ---
             let subtitleTimeout;
             function showSubtitle(text) {
                 const bubble = document.getElementById("chat-bubble");
                 bubble.innerText = text;
                 bubble.classList.add("visible");
-
-                // Reset the timer if a new message comes in
                 clearTimeout(subtitleTimeout);
-                subtitleTimeout = setTimeout(() => {
-                    bubble.classList.remove("visible");
-                }, 4000); // Fades out after 4 seconds
+                
+                const checkHide = () => {
+                    if (currentUIState !== "speaking") {
+                        bubble.classList.remove("visible");
+                    } else {
+                        // If still speaking, check again in 1 second
+                        subtitleTimeout = setTimeout(checkHide, 1000);
+                    }
+                };
+                
+                // Show for at least 4 seconds, or 60ms per character for long texts
+                const duration = Math.max(4000, text.length * 60);
+                subtitleTimeout = setTimeout(checkHide, duration);
             }
 
-            // --- 3D Setup ---
+            let globalMouse = new THREE.Vector2();
+            let lastMouseX = 0,
+                lastMouseY = 0,
+                timeSinceLastMove = 0;
+            const DEEP_IDLE_TIMEOUT = 120.0;
+
+            window.updateGlobalMouse = function (normX, normY) {
+                if (
+                    Math.abs(normX - lastMouseX) > 0.01 ||
+                    Math.abs(normY - lastMouseY) > 0.01
+                ) {
+                    timeSinceLastMove = 0;
+                    if (aiState === "DEEP_IDLE") {
+                        aiState = "TRACKING";
+                        stateTimer = 0;
+                    }
+                }
+                lastMouseX = normX;
+                lastMouseY = normY;
+                globalMouse.x = normX;
+                globalMouse.y = normY;
+            };
+
+            window.triggerHideAnimation = function () {
+                aiState = "HIDING";
+                stateTimer = 0;
+            };
+            window.wakeUpAnimation = function () {
+                aiState = "TRACKING";
+                stateTimer = 0;
+                timeSinceLastMove = 0;
+            };
+
             let scene, camera, renderer, controls;
-            let avatarModel;
+            let currentModel = null;
             const clock = new THREE.Clock();
+            let headBone = null,
+                neckBone = null,
+                spineBone = null;
+            let shoulderL = null,
+                upperArmL = null,
+                lowerArmL = null;
+            let shoulderR = null,
+                upperArmR = null,
+                lowerArmR = null;
+
+            let baseSpineRot = new THREE.Euler();
+
+            // --- DEEP IDLE SUB-BEHAVIOR ENGINE ---
+            let deepIdleSubState = "RESTING";
+            let deepIdleSubTimer = 0;
+            let deepIdleSubDuration = 5.0;
+            let aiState = "TRACKING",
+                stateTimer = 0,
+                lastTime = 0;
+
+            const IDLE_POSE = {
+                head: { x: -0.29, y: -0.33, z: -0.11 },
+                neck: { x: 0.52, y: 0.21, z: 0 },
+                shoulderl: { x: 0.09, y: -0.1, z: -1.95 },
+                upperarml: { x: -0.15, y: 0.21, z: -0.73 },
+                lowerarml: { x: 0.13, y: -0.02, z: -0.34 },
+                palml: { x: 0.17, y: 0.74, z: -0.11 },
+                shoulderr: { x: 0.17, y: 0.21, z: 1.95 },
+                upperarmr: { x: -0.22, y: 0.13, z: 0.8 },
+                lowerarmr: { x: 0.13, y: -0.94, z: 0.34 },
+                palmr: { x: 0.09, y: 0.05, z: 0.19 },
+            };
+
+            function applyIdlePose(model) {
+                model.traverse((child) => {
+                    if (child.isBone) {
+                        const name = child.name.toLowerCase();
+                        if (IDLE_POSE[name]) {
+                            child.rotation.x = IDLE_POSE[name].x;
+                            child.rotation.y = IDLE_POSE[name].y;
+                            child.rotation.z = IDLE_POSE[name].z;
+                        }
+                    }
+                });
+            }
 
             init();
             animate();
@@ -163,7 +392,7 @@
                     0.1,
                     100,
                 );
-                camera.position.set(0, 0.5, 2.5);
+                camera.position.set(0, 1.2, 2.5);
 
                 renderer = new THREE.WebGLRenderer({
                     antialias: true,
@@ -175,46 +404,329 @@
                 document.body.appendChild(renderer.domElement);
 
                 controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.target.set(0, 0.5, 0);
+                controls.target.set(0, 1, 0);
+                controls.enableZoom = false;
                 controls.enablePan = false;
+                controls.enableRotate = false;
                 controls.update();
 
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
                 const hemiLight = new THREE.HemisphereLight(
                     0xffffff,
                     0x444444,
-                    1.0,
+                    0.6,
                 );
-                hemiLight.position.set(0, 20, 0);
                 scene.add(hemiLight);
+                const faceLight = new THREE.PointLight(0xfff0e6, 0.6, 10);
+                faceLight.position.set(0, 1.5, 1.5);
+                scene.add(faceLight);
+                const keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
+                keyLight.position.set(5, 5, 5);
+                scene.add(keyLight);
+                const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                fillLight.position.set(-5, 3, 2);
+                scene.add(fillLight);
 
-                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                dirLight.position.set(3, 10, 10);
-                scene.add(dirLight);
+                stateLight = new THREE.PointLight(0x000000, 0.0, 3);
+                stateLight.position.set(0, 0.2, 1.2);
+                scene.add(stateLight);
 
                 const loader = new THREE.GLTFLoader();
                 loader.load("avatar.glb", function (gltf) {
-                    avatarModel = gltf.scene;
-                    avatarModel.rotation.y = -1.5;
-                    scene.add(avatarModel);
+                    currentModel = gltf.scene;
+                    currentModel.scale.set(1.3, 1.3, 1.3);
+                    currentModel.position.y = -0.05; // Raised position fix applied
+                    scene.add(currentModel);
+
+                    currentModel.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.roughness = 0.8;
+                            child.material.metalness = 0.0;
+                            child.material.needsUpdate = true;
+                        }
+                        if (child.isBone) {
+                            const lowerName = child.name.toLowerCase();
+                            if (lowerName === "head") headBone = child;
+                            if (lowerName === "neck") neckBone = child;
+                            if (lowerName === "shoulderl") shoulderL = child;
+                            if (lowerName === "upperarml") upperArmL = child;
+                            if (lowerName === "lowerarml") lowerArmL = child;
+                            if (lowerName === "shoulderr") shoulderR = child;
+                            if (lowerName === "upperarmr") upperArmR = child;
+                            if (lowerName === "lowerarmr") lowerArmR = child;
+                            if (
+                                lowerName === "chest" ||
+                                lowerName === "spine2"
+                            ) {
+                                spineBone = child;
+                                baseSpineRot.copy(spineBone.rotation);
+                            }
+                        }
+                    });
+                    applyIdlePose(currentModel);
                 });
 
-                window.addEventListener("resize", onWindowResize, false);
-            }
-
-            function onWindowResize() {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+                window.addEventListener("resize", () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                });
             }
 
             function animate() {
                 requestAnimationFrame(animate);
-                controls.update();
-                if (avatarModel) {
-                    const time = clock.getElapsedTime();
-                    avatarModel.position.y = Math.sin(time * 2) * 0.01;
+                const time = clock.getElapsedTime();
+                const delta = time - lastTime;
+                lastTime = time;
+
+                // --- PROCEDURAL LIGHTING & VOICE PULSE ---
+                if (stateLight) {
+                    stateLight.color.lerp(targetStateColor, 0.05);
+                    if (currentUIState === "speaking") {
+                        const voicePulse =
+                            0.3 +
+                            Math.sin(time * 40) * 0.4 +
+                            Math.random() * 0.3;
+                        stateLight.intensity = THREE.MathUtils.lerp(
+                            stateLight.intensity,
+                            targetStateIntensity * voicePulse,
+                            0.6,
+                        );
+                    } else {
+                        stateLight.intensity = THREE.MathUtils.lerp(
+                            stateLight.intensity,
+                            targetStateIntensity,
+                            0.05,
+                        );
+                    }
                 }
+
+                // --- 1. MAIN STATE MACHINE & AFK CHECK ---
+                stateTimer += delta;
+                timeSinceLastMove += delta;
+
+                if (aiState !== "HIDING") {
+                    if (
+                        timeSinceLastMove > DEEP_IDLE_TIMEOUT &&
+                        aiState !== "DEEP_IDLE"
+                    ) {
+                        aiState = "DEEP_IDLE";
+                        stateTimer = 0;
+                        deepIdleSubState = "RESTING";
+                        deepIdleSubTimer = 0;
+                        deepIdleSubDuration = 4.0 + Math.random() * 4.0;
+                    } else if (
+                        aiState === "TRACKING" &&
+                        stateTimer > 45.0 + Math.random() * 30.0
+                    ) {
+                        aiState = "ZONED_OUT";
+                        stateTimer = 0;
+                    } else if (
+                        aiState === "ZONED_OUT" &&
+                        stateTimer > 5.0 + Math.random() * 10.0
+                    ) {
+                        aiState = "TRACKING";
+                        stateTimer = 0;
+                    }
+                }
+
+                // --- 2. DEEP IDLE SUB-BEHAVIOR SEQUENCER ---
+                if (aiState === "DEEP_IDLE") {
+                    deepIdleSubTimer += delta;
+
+                    if (deepIdleSubTimer > deepIdleSubDuration) {
+                        deepIdleSubTimer = 0;
+                        const behaviors = [
+                            "RESTING",
+                            "LOOKING_AROUND",
+                            "BIG_STRETCH",
+                        ].filter((s) => s !== deepIdleSubState);
+                        deepIdleSubState =
+                            behaviors[
+                                Math.floor(Math.random() * behaviors.length)
+                            ];
+
+                        if (deepIdleSubState === "RESTING") {
+                            deepIdleSubDuration = 4.0 + Math.random() * 4.0;
+                        } else if (deepIdleSubState === "LOOKING_AROUND") {
+                            deepIdleSubDuration = 5.0 + Math.random() * 5.0;
+                        } else if (deepIdleSubState === "BIG_STRETCH") {
+                            deepIdleSubDuration = 6.0 + Math.random() * 6.0;
+                        }
+                    }
+                }
+
+                // --- 3. CALCULATE POSTURE MATH ---
+                let targetX = 0,
+                    targetY = 0,
+                    spineTargetX = 0,
+                    spineTargetY = 0,
+                    spineTargetZ = 0;
+
+                if (aiState === "HIDING") {
+                    targetX = 0;
+                    targetY = 0;
+                    spineTargetX = 0;
+                    spineTargetY = 0;
+                } else if (aiState === "TRACKING") {
+                    let lookVertical = -globalMouse.y,
+                        lookHorizontal = globalMouse.x;
+                    const lookUpLimit = 0.7,
+                        lookDownLimit = 0.15;
+                    const cornerDampener =
+                        1.0 -
+                        (lookVertical < 0 ? Math.abs(lookVertical) * 0.35 : 0);
+                    targetX =
+                        lookVertical *
+                        (lookVertical < 0 ? lookUpLimit : lookDownLimit);
+                    targetY = lookHorizontal * 0.6 * cornerDampener;
+                    spineTargetX = targetX * 0.25;
+                    spineTargetY = targetY * 0.25;
+                } else if (aiState === "ZONED_OUT") {
+                    targetX = Math.sin(time * 0.6) * 0.2;
+                    targetY =
+                        Math.sin(time * 0.4) * 0.35 +
+                        Math.cos(time * 0.7) * 0.15;
+                    spineTargetX = targetX * 0.25;
+                    spineTargetY = targetY * 0.25;
+                } else if (aiState === "DEEP_IDLE") {
+                    if (deepIdleSubState === "RESTING") {
+                        targetX = 0;
+                        targetY = 0;
+                        spineTargetX = 0;
+                        spineTargetY = 0;
+                        spineTargetZ = 0;
+                    } else if (deepIdleSubState === "LOOKING_AROUND") {
+                        targetX = Math.sin(time * 0.4) * 0.25;
+                        targetY = Math.cos(time * 0.3) * 0.5;
+                        spineTargetX = 0;
+                        spineTargetY = 0;
+                        spineTargetZ = 0;
+                    } else if (deepIdleSubState === "BIG_STRETCH") {
+                        targetX = Math.sin(time * 0.3) * 0.3;
+                        targetY = Math.cos(time * 0.2) * 0.6;
+                        spineTargetX = targetX * 0.4;
+                        spineTargetY = targetY * 0.5;
+                        spineTargetZ = Math.sin(time * 0.35) * 0.25;
+                    }
+                }
+
+                const lerpSpeed = aiState === "TRACKING" ? 0.15 : 0.05;
+
+                if (headBone && neckBone) {
+                    headBone.rotation.x = THREE.MathUtils.lerp(
+                        headBone.rotation.x,
+                        IDLE_POSE.head.x + targetX,
+                        lerpSpeed,
+                    );
+                    headBone.rotation.y = THREE.MathUtils.lerp(
+                        headBone.rotation.y,
+                        IDLE_POSE.head.y + targetY,
+                        lerpSpeed,
+                    );
+                    headBone.rotation.z = THREE.MathUtils.lerp(
+                        headBone.rotation.z,
+                        IDLE_POSE.head.z,
+                        lerpSpeed,
+                    );
+
+                    neckBone.rotation.x = THREE.MathUtils.lerp(
+                        neckBone.rotation.x,
+                        IDLE_POSE.neck.x + targetX * 0.5,
+                        lerpSpeed,
+                    );
+                    // FIXED: Replaced the broken property typo with standard bone rotation
+                    neckBone.rotation.y = THREE.MathUtils.lerp(
+                        neckBone.rotation.y,
+                        IDLE_POSE.neck.y + targetY * 0.4,
+                        lerpSpeed,
+                    );
+                    neckBone.rotation.z = THREE.MathUtils.lerp(
+                        neckBone.rotation.z,
+                        IDLE_POSE.neck.z,
+                        lerpSpeed,
+                    );
+                }
+
+                const breathSine = Math.sin(time * 2.0);
+                if (spineBone) {
+                    const breathScale = 1 + breathSine * 0.015;
+                    spineBone.scale.set(breathScale, breathScale, breathScale);
+                    const finalSpineX =
+                            baseSpineRot.x + spineTargetX + breathSine * 0.025,
+                        finalSpineY = baseSpineRot.y + spineTargetY,
+                        finalSpineZ = baseSpineRot.z + spineTargetZ;
+                    spineBone.rotation.x = THREE.MathUtils.lerp(
+                        spineBone.rotation.x,
+                        finalSpineX,
+                        lerpSpeed,
+                    );
+                    spineBone.rotation.y = THREE.MathUtils.lerp(
+                        spineBone.rotation.y,
+                        finalSpineY,
+                        lerpSpeed,
+                    );
+                    spineBone.rotation.z = THREE.MathUtils.lerp(
+                        spineBone.rotation.z,
+                        finalSpineZ,
+                        lerpSpeed,
+                    );
+                }
+
+                const armSwayX = Math.sin(time * 1.2) * 0.02,
+                    armSwayZ = Math.cos(time * 1.5) * 0.03,
+                    forearmSway = Math.sin(time * 1.8) * 0.02;
+                if (upperArmL) {
+                    upperArmL.rotation.x = THREE.MathUtils.lerp(
+                        upperArmL.rotation.x,
+                        IDLE_POSE.upperarml.x + armSwayX,
+                        0.1,
+                    );
+                    upperArmL.rotation.z = THREE.MathUtils.lerp(
+                        upperArmL.rotation.z,
+                        IDLE_POSE.upperarml.z + armSwayZ,
+                        0.1,
+                    );
+                }
+                if (upperArmR) {
+                    upperArmR.rotation.x = THREE.MathUtils.lerp(
+                        upperArmR.rotation.x,
+                        IDLE_POSE.upperarmr.x + armSwayX,
+                        0.1,
+                    );
+                    upperArmR.rotation.z = THREE.MathUtils.lerp(
+                        upperArmR.rotation.z,
+                        IDLE_POSE.upperarmr.z - armSwayZ,
+                        0.1,
+                    );
+                }
+                if (lowerArmL)
+                    lowerArmL.rotation.x = THREE.MathUtils.lerp(
+                        lowerArmL.rotation.x,
+                        IDLE_POSE.lowerarml.x + forearmSway,
+                        0.1,
+                    );
+                if (lowerArmR)
+                    lowerArmR.rotation.x = THREE.MathUtils.lerp(
+                        lowerArmR.rotation.x,
+                        IDLE_POSE.lowerarmr.x + forearmSway,
+                        0.1,
+                    );
+                if (shoulderL)
+                    shoulderL.rotation.z = THREE.MathUtils.lerp(
+                        shoulderL.rotation.z,
+                        IDLE_POSE.shoulderl.z + breathSine * 0.02,
+                        0.1,
+                    );
+                if (shoulderR)
+                    shoulderR.rotation.z = THREE.MathUtils.lerp(
+                        shoulderR.rotation.z,
+                        IDLE_POSE.shoulderr.z - breathSine * 0.02,
+                        0.1,
+                    );
+
+                controls.update();
                 renderer.render(scene, camera);
             }
         </script>
