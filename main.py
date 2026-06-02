@@ -2325,6 +2325,25 @@ if __name__ == "__main__":
     avatar = ModernClippy()
     avatar.show()
 
+    # Play a randomized startup greeting
+    import random
+    from PyQt6.QtCore import QTimer
+    greetings = [
+        "Hello! Ready to be productive?",
+        "AURA systems online. How can I help?",
+        "Hello, I am AURA, your desktop companion.",
+        "Good to see you! All systems are green.",
+        "Boot sequence complete. Ready when you are."
+    ]
+    greeting = random.choice(greetings)
+    
+    def play_greeting():
+        avatar.comm.change_state.emit("speaking")
+        avatar.comm.show_subtitle.emit(greeting)
+        avatar.speak(greeting)
+        
+    QTimer.singleShot(1500, play_greeting)
+
     print("-" * 40)
     print("🚀 DESKTOP ENGINE ASSISTANT IS ONLINE")
     print("-" * 40)
