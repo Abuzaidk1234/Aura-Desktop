@@ -34,6 +34,13 @@ def enable_blur(hwnd):
     except Exception as e:
         print(f"Blur failed: {e}")
 
+def apply_rounded_corners(hwnd, width, height, radius):
+    try:
+        hrgn = ctypes.windll.gdi32.CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2)
+        ctypes.windll.user32.SetWindowRgn(int(hwnd), hrgn, True)
+    except Exception as e:
+        print(f"Corner clipping failed: {e}")
+
 class DragFilter(QObject):
     def __init__(self, window):
         super().__init__()
@@ -149,9 +156,10 @@ class PomodoroWindow(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(1000)
-
         self.resize(180, 100)
-
+        
+        # Apply strict Windows corner clipping to hide square blur corners
+        apply_rounded_corners(self.winId(), 180, 100, 16)
     def format_time(self, seconds):
         m = seconds // 60
         s = seconds % 60
@@ -228,6 +236,9 @@ class ShutdownOSDWindow(QWidget):
         
         # Enable OS-level blur
         enable_blur(self.winId())
+        
+        # Apply strict Windows corner clipping to perfectly match 40px radius
+        apply_rounded_corners(self.winId(), 600, 450, 40)
         
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
