@@ -37,9 +37,10 @@ Powered entirely by local AI models (via Ollama) and Edge TTS, AURA respects you
    ```
 
 4. **Launch AURA**
-   ```bash
-   python main.py
-   ```
+   You have two ways to start your assistant:
+   - **Terminal Mode:** Run `python main.py` in your terminal to see behind-the-scenes logs.
+   - **Silent Desktop Mode (Recommended):** Double-click the `Start AURA.vbs` file. This launches AURA completely silently in the background without any ugly CMD windows! *Tip: Right-click `Start AURA.vbs` and select "Send to -> Desktop" to create a quick-launch shortcut.*
+
    *Note: AURA is designed specifically for Windows environments and utilizes Windows-specific APIs for deep OS integration.*
 
 For a deep dive into every command, hotkey, and feature, check out the [User Guide](USER_GUIDE.md).

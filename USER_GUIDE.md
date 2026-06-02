@@ -2,7 +2,12 @@
 
 Welcome to the ultimate guide for using AURA. This document breaks down every feature, keyboard shortcut, voice command, and integration built into your desktop assistant, so you can achieve the perfect workflow.
 
-## 1. Waking & Interacting with AURA
+## 1. Launching & Waking AURA
+
+### How to Start AURA
+*   **The Silent Way (Recommended):** Double-click the `Start AURA.vbs` script in your folder. This uses `pythonw` to run AURA entirely in the background without opening a clunky black CMD terminal on your screen. 
+    *   *Pro-Tip:* Right-click `Start AURA.vbs`, select **Send to -> Desktop (create shortcut)**, and you'll have a permanent desktop icon to wake her up!
+*   **The Developer Way:** Run `python main.py` in your terminal if you want to see her real-time logs and thought process.
 
 AURA runs silently in the background and only activates when you need her. 
 
