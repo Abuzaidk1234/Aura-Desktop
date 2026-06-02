@@ -58,6 +58,12 @@ Control your music and videos effortlessly:
 
 ## 4. Advanced AI Superpowers
 
+> [!IMPORTANT]
+> **The Ollama Requirement (Non-Negotiable)**
+> AURA's intelligence relies completely on [Ollama](https://ollama.com/) running the **Llama 3.2** model locally on your machine. This requires a one-time ~2GB model download. 
+> 
+> *Why is this required?* AURA is designed to be the ultimate private assistant. She reads your clipboard, your screen, and your personal system vitals. By forcing a 2GB local AI model instead of a lightweight Cloud API, **your private data physically never leaves your computer.** Without Ollama, AURA has no brain and cannot function.
+
 AURA utilizes the Llama 3.2 local model to provide intelligent, context-aware analysis.
 
 ### Clipboard Analysis

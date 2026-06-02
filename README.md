@@ -21,12 +21,13 @@ Powered entirely by local AI models (via Ollama) and Edge TTS, AURA respects you
 1. **Install Python 3.10+**  
    Ensure you have a modern version of Python installed on your Windows machine.
 
-2. **Install Ollama**  
-   Download and install [Ollama](https://ollama.com/) so AURA has a brain. 
-   Once installed, open a terminal and pull the Llama 3.2 model:
-   ```bash
-   ollama pull llama3.2
-   ```
+2. **Install Ollama & Llama 3.2 (MANDATORY)**  
+   > [!IMPORTANT]
+   > **AURA has no brain without Ollama.** You *must* download and install [Ollama](https://ollama.com/). Once installed, open a terminal and pull the Llama 3.2 model:
+   > ```bash
+   > ollama pull llama3.2
+   > ```
+   > *Note: This will download a ~2GB local AI model to your hard drive. This is **non-negotiable**. AURA does not use cloud APIs (like ChatGPT). She processes everything locally to guarantee zero latency and 100% privacy for your clipboard and system data.*
 
 3. **Clone the Repository & Install Dependencies**
    ```bash
