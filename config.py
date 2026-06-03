@@ -1,7 +1,13 @@
 import os
+import sys
 import json
 
-CONFIG_FILE = "config.json"
+if getattr(sys, 'frozen', False):
+    base_dir = os.path.dirname(sys.executable)
+else:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_FILE = os.path.join(base_dir, "config.json")
 DEFAULT_CONFIG = {
     "wake_words": ["aura", "jarvis", "buddy", "computer", "clippy", "sleepy", "creepy", "ora", "ara", "laura", "are a"],
     "idle_timeout_minutes": 5,
@@ -31,5 +37,14 @@ def load_config():
             return config
     except Exception:
         return DEFAULT_CONFIG
+
+def save_config(new_config):
+    global CONFIG
+    CONFIG.update(new_config)
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(CONFIG, f, indent=4)
+    except Exception as e:
+        print(f"Failed to save config: {e}")
 
 CONFIG = load_config()

@@ -11,8 +11,11 @@ import time
 import urllib.parse
 import uuid
 import webbrowser
-import winsound
+import socket
+import wave
 from datetime import datetime
+from faster_whisper import WhisperModel
+from piper import PiperVoice
 
 import edge_tts
 import keyboard
@@ -20,42 +23,75 @@ import ollama
 import psutil
 import pyperclip
 import speech_recognition as sr
+
+# --- Configuration and Core Imports ---
+from config import CONFIG
+from core.signals import Communicate
 from PyQt6.QtCore import (
     QEasingCurve,
-    QEvent,
     QObject,
     QPoint,
     QPropertyAnimation,
     Qt,
     QTimer,
     QUrl,
-    pyqtSignal,
 )
-from PyQt6.QtGui import QCursor
+from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import (
     QApplication,
-    QFrame,
-    QHBoxLayout,
-    QInputDialog,
-    QLabel,
     QMenu,
-    QPushButton,
     QStyle,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
-
-# --- Configuration and Core Imports ---
-from config import CONFIG, CONFIG_FILE, load_config
-from core.signals import Communicate
 from ui.components import DragFilter, PomodoroWindow, ShutdownOSDWindow
+from ui.settings_window import SettingsWindow
 
+
+def check_internet_connection():
+    try:
+        socket.create_connection(("1.1.1.1", 53), timeout=1.0)
+        return True
+    except OSError:
+        pass
+    return False
+
+# --- Global Offline Models ---
+WHISPER_MODEL = None
+PIPER_VOICE = None
+
+def init_offline_models():
+    global WHISPER_MODEL, PIPER_VOICE
+    try:
+        base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+        whisper_dir = os.path.join(base_dir, "assets", "whisper-model")
+        # Download and load the tiny.en model to CPU
+        WHISPER_MODEL = WhisperModel("tiny.en", device="cpu", compute_type="int8", download_root=whisper_dir)
+        PIPER_VOICE = PiperVoice.load(os.path.join(base_dir, "assets", "piper-model", "model.onnx"))
+        print("Offline models loaded successfully.")
+    except Exception as e:
+        print(f"Failed to load offline models: {e}")
 
 # --- The Main Application ---
 class ModernClippy(QWidget):
+    def perform_stt(self, recognizer, audio_data):
+        if check_internet_connection():
+            return recognizer.recognize_google(audio_data)
+        else:
+            if WHISPER_MODEL is None:
+                print("❌ Whisper model not loaded yet.")
+                return ""
+            
+            import numpy as np
+            raw_audio = audio_data.get_raw_data(convert_rate=16000, convert_width=2)
+            audio_np = np.frombuffer(raw_audio, np.int16).astype(np.float32) / 32768.0
+            segments, _ = WHISPER_MODEL.transcribe(audio_np, beam_size=5, language="en")
+            
+            return "".join([segment.text for segment in segments]).strip()
+
     def __init__(self):
         """
         Initializes the ModernClippy application overlay, setting up UI, IPC signals, and background daemon threads.
@@ -63,6 +99,9 @@ class ModernClippy(QWidget):
         super().__init__()
 
         self.cleanup_old_audio_files()
+        
+        # Load models in a non-blocking way
+        threading.Thread(target=init_offline_models, daemon=True).start()
 
         self.is_interactive = False
         self.force_wake = False
@@ -99,7 +138,7 @@ class ModernClippy(QWidget):
         self.browser.setStyleSheet("background: transparent; border: none;")
         self.browser.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        current_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
         html_path = os.path.join(current_dir, "index.html")
         self.browser.setUrl(QUrl.fromLocalFile(html_path))
         self.browser.titleChanged.connect(self.handle_html_title_command)
@@ -110,7 +149,6 @@ class ModernClippy(QWidget):
         for child in self.browser.findChildren(QObject):
             child.installEventFilter(self.drag_filter)
 
-        self.setup_tray_icon()
         self.comm = Communicate()
 
         self.comm.toggle_click.connect(self.toggle_ghost_mode)
@@ -153,6 +191,8 @@ class ModernClippy(QWidget):
         self.enforcer_timer.timeout.connect(self.enforce_visibility)
         self.enforcer_timer.start()
 
+        self.settings_window = None
+        self.setup_tray_icon()
         self.start_audio_engine()
         # global mouse tracking
         self.mouse_timer = QTimer(self)
@@ -201,6 +241,17 @@ class ModernClippy(QWidget):
             self.showNormal()
         self.keep_inside_safe_area()
         self.raise_()
+        
+        import ctypes
+        try:
+            # HWND_TOPMOST = -1, SWP_NOMOVE = 0x0002 | SWP_NOSIZE = 0x0001 | SWP_NOACTIVATE = 0x0010 = 0x0013
+            ctypes.windll.user32.SetWindowPos(int(self.winId()), -1, 0, 0, 0, 0, 0x0013)
+            # Enforce Pomodoro to stay strictly on top of other heavy apps
+            if hasattr(self, 'pomodoro_win') and self.pomodoro_win and self.pomodoro_win.isVisible():
+                self.pomodoro_win.raise_()
+                ctypes.windll.user32.SetWindowPos(int(self.pomodoro_win.winId()), -1, 0, 0, 0, 0, 0x0013)
+        except Exception:
+            pass
 
     def safe_position(self, side="right"):
         screen = QApplication.primaryScreen().availableGeometry()
@@ -276,17 +327,27 @@ class ModernClippy(QWidget):
         def tts_worker():
             self.is_speaking = True
             try:
-                VOICE = CONFIG.get("tts_voice", "en-US-ChristopherNeural")
-                RATE = CONFIG.get("tts_rate", "+15%")
-
                 unique_id = uuid.uuid4().hex
-                OUTPUT_FILE = os.path.abspath(f"temp_speech_{unique_id}.mp3")
-
-                communicate = edge_tts.Communicate(text, VOICE, rate=RATE)
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(communicate.save(OUTPUT_FILE))
+                OUTPUT_FILE = os.path.abspath(f"temp_speech_{unique_id}.wav")
+                
+                if check_internet_connection():
+                    OUTPUT_FILE = os.path.abspath(f"temp_speech_{unique_id}.mp3")
+                    VOICE = CONFIG.get("tts_voice", "en-US-ChristopherNeural")
+                    RATE = CONFIG.get("tts_rate", "+15%")
+                    communicate = edge_tts.Communicate(text, VOICE, rate=RATE)
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(communicate.save(OUTPUT_FILE))
+                else:
+                    if PIPER_VOICE is not None:
+                        with wave.open(OUTPUT_FILE, "wb") as f:
+                            PIPER_VOICE.synthesize_wav(text, f)
+                    else:
+                        print("❌ Piper model not loaded yet.")
+                        self.is_speaking = False
+                        if return_to_idle:
+                            self.comm.change_state.emit("idle")
+                        return
 
                 ctypes.windll.winmm.mciSendStringW("close aura_audio", None, 0, None)
                 ctypes.windll.winmm.mciSendStringW(
@@ -340,9 +401,11 @@ class ModernClippy(QWidget):
 
     def setup_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
-        )
+        icon_path = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "aura_icon.ico")
+        if os.path.exists(icon_path):
+            self.tray_icon.setIcon(QIcon(icon_path))
+        else:
+            self.tray_icon.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
         tray_menu = QMenu()
 
         toggle_action = tray_menu.addAction("Toggle Ghost Mode")
@@ -351,6 +414,9 @@ class ModernClippy(QWidget):
         self.mute_action = tray_menu.addAction("Mute Microphone (DND)")
         self.mute_action.setCheckable(True)
         self.mute_action.triggered.connect(self.toggle_mute_state)
+
+        settings_action = tray_menu.addAction("⚙️ Settings")
+        settings_action.triggered.connect(self.open_settings_window)
 
         tray_menu.addSeparator()
         quit_action = tray_menu.addAction("Exit Assistant")
@@ -366,6 +432,15 @@ class ModernClippy(QWidget):
             self.comm.change_state.emit("idle")
         else:
             print("🔊 Privacy Mode Disabled: Listening active.")
+
+    def open_settings_window(self):
+        if self.settings_window is not None:
+            self.settings_window.close()
+          # We keep track of the settings window so it doesn't get garbage collected
+        self.settings_window = SettingsWindow(is_standalone=False)
+        self.settings_window.show()
+        self.settings_window.raise_()
+        self.settings_window.activateWindow()
 
     def position_in_corner(self):
         position = self.safe_position("right")
@@ -418,6 +493,8 @@ class ModernClippy(QWidget):
         elif title == "CMD_END:":
             # This triggers if the user pressed Esc, clicked away, or hit Enter on an empty box
             self.restore_ghost_state()
+        elif title == "CMD_SETTINGS:":
+            self.open_settings_window()
 
     def restore_ghost_state(self):
         """Restores the window's click-through state if it was originally in Ghost mode."""
@@ -488,9 +565,7 @@ class ModernClippy(QWidget):
 
     def verify_and_emit(self, required_vk_codes, signal_or_func):
         import ctypes
-
         import keyboard
-
         for vk in required_vk_codes:
             # 0x8000 indicates the key is physically held down right now
             if not (ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000):
@@ -498,7 +573,7 @@ class ModernClippy(QWidget):
                 # We clear the memory to heal it and ignore this trigger
                 keyboard._pressed_events.clear()
                 return
-
+                
         if hasattr(signal_or_func, "emit"):
             signal_or_func.emit()
         else:
@@ -520,32 +595,11 @@ class ModernClippy(QWidget):
                 keyboard.unhook_all()
                 keyboard._pressed_events.clear()
                 time.sleep(0.5)
-                keyboard.add_hotkey(
-                    "ctrl+shift+c",
-                    lambda: self.verify_and_emit(
-                        [0x11, 0x10, 0x43], self.comm.toggle_click.emit
-                    ),
-                )
-                keyboard.add_hotkey(
-                    "ctrl+space",
-                    lambda: self.verify_and_emit([0x11, 0x20], self.comm.wake_up.emit),
-                )
-                keyboard.add_hotkey(
-                    "ctrl+shift+space",
-                    lambda: self.verify_and_emit(
-                        [0x11, 0x10, 0x20], self.comm.open_text_prompt.emit
-                    ),
-                )
-                keyboard.add_hotkey(
-                    "ctrl+shift+alt+q",
-                    lambda: self.verify_and_emit(
-                        [0x11, 0x10, 0x12, 0x51], self.comm.exit_app.emit
-                    ),
-                )
-                keyboard.add_hotkey(
-                    "ctrl+shift+a",
-                    lambda: self.verify_and_emit([0x11, 0x10, 0x41], self.panic_abort),
-                )
+                keyboard.add_hotkey("ctrl+shift+c", lambda: self.verify_and_emit([0x11, 0x10, 0x43], self.comm.toggle_click.emit))
+                keyboard.add_hotkey("ctrl+space", lambda: self.verify_and_emit([0x11, 0x20], self.comm.wake_up.emit))
+                keyboard.add_hotkey("ctrl+shift+space", lambda: self.verify_and_emit([0x11, 0x10, 0x20], self.comm.open_text_prompt.emit))
+                keyboard.add_hotkey("ctrl+shift+alt+q", lambda: self.verify_and_emit([0x11, 0x10, 0x12, 0x51], self.comm.exit_app.emit))
+                keyboard.add_hotkey("ctrl+shift+a", lambda: self.verify_and_emit([0x11, 0x10, 0x41], self.panic_abort))
                 print("✅ Hotkeys registered successfully!")
                 break
             except Exception as e:
@@ -699,11 +753,11 @@ class ModernClippy(QWidget):
                         continue
 
                     if not self.is_processing:
-                        recognizer.pause_threshold = 0.5
+                        recognizer.pause_threshold = CONFIG.get("mic_pause_threshold", 1.5)
                         audio = recognizer.listen(
-                            source, timeout=1, phrase_time_limit=10
+                            source, timeout=1, phrase_time_limit=20
                         )
-                        wake_text = recognizer.recognize_google(audio).lower()
+                        wake_text = self.perform_stt(recognizer, audio).lower()
 
                         if any(word in wake_text for word in wake_list):
                             self.is_processing = True
@@ -765,11 +819,11 @@ class ModernClippy(QWidget):
     def process_command(self, recognizer, source):
         try:
             time.sleep(0.3)
-            recognizer.pause_threshold = CONFIG.get("mic_pause_threshold", 1.0)
-            audio_data = recognizer.listen(source, timeout=5, phrase_time_limit=15)
+            recognizer.pause_threshold = CONFIG.get("mic_pause_threshold", 1.5)
+            audio_data = recognizer.listen(source, timeout=5, phrase_time_limit=30)
             self.comm.change_state.emit("processing")
             print("Processing command...")
-            command_text = recognizer.recognize_google(audio_data)
+            command_text = self.perform_stt(recognizer, audio_data)
             print(f"✅ You said: '{command_text}'")
             self.execute_intent(command_text)
 
@@ -784,7 +838,7 @@ class ModernClippy(QWidget):
         except Exception as e:
             print(f"❌ Mic Error: {e}")
         finally:
-            recognizer.pause_threshold = 0.5
+            recognizer.pause_threshold = CONFIG.get("mic_pause_threshold", 1.5)
 
     # ==========================================
     # --- THE BRAIN & HANDS ---
@@ -806,7 +860,6 @@ class ModernClippy(QWidget):
         called_speak = False
         try:
             import time
-
             start_exec_time = time.time()
             current_time = time.time()
             cooldown = CONFIG.get("debounce_cooldown_seconds", 2.0)
@@ -836,8 +889,110 @@ class ModernClippy(QWidget):
                 self.speak(response, return_to_idle=True)
                 return
 
-            if len(self.raw_spoken_text.split()) <= 3:
-                if any(
+            if len(self.raw_spoken_text.split()) <= 4:
+                if self.is_pc_shutdown_request(self.raw_spoken_text):
+                    print("⚡ Fast-Path Interceptor: Shutdown PC")
+                    self.execute_action({"action": "shutdown_pc", "target": ""})
+                    self.comm.show_subtitle.emit("Power nap.")
+                    self.speak("Power nap.", return_to_idle=True)
+                    return
+                elif any(word in self.raw_spoken_text for word in ["close aura", "exit aura", "quit aura"]):
+                    print("⚡ Fast-Path Interceptor: Exit")
+                    self.execute_action({"action": "exit", "target": ""})
+                    self.comm.show_subtitle.emit("Bye-bloop.")
+                    self.speak("Bye-bloop.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["lock pc", "lock screen", "lock machine", "lock my pc"]):
+                    print("⚡ Fast-Path Interceptor: Lock PC")
+                    self.execute_action({"action": "shortcut", "target": "windows+l"})
+                    self.comm.show_subtitle.emit("Locked.")
+                    self.speak("Locked.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["take screenshot", "snipping tool", "take a screenshot", "screenshot"]):
+                    print("⚡ Fast-Path Interceptor: Screenshot")
+                    self.execute_action({"action": "shortcut", "target": "windows+shift+s"})
+                    self.comm.show_subtitle.emit("Snapping.")
+                    self.speak("Snapping.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["start pomodoro", "pomodoro timer", "pomodoro"]):
+                    print("⚡ Fast-Path Interceptor: Pomodoro")
+                    self.execute_action({"action": "start_pomodoro", "target": ""})
+                    self.comm.show_subtitle.emit("Starting your pomodoro timer.")
+                    self.speak("Starting your pomodoro timer.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["mute volume", "mute audio", "mute pc", "quiet"]):
+                    print("⚡ Fast-Path Interceptor: Mute")
+                    self.execute_action({"action": "shortcut", "target": "volume mute"})
+                    self.comm.show_subtitle.emit("Shushed.")
+                    self.speak("Shushed.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["volume up", "louder"]):
+                    print("⚡ Fast-Path Interceptor: Volume Up")
+                    self.execute_action({"action": "shortcut", "target": "volume up"})
+                    self.comm.show_subtitle.emit("Louder.")
+                    self.speak("Louder.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["volume down", "quieter"]):
+                    print("⚡ Fast-Path Interceptor: Volume Down")
+                    self.execute_action({"action": "shortcut", "target": "volume down"})
+                    self.comm.show_subtitle.emit("Softer.")
+                    self.speak("Softer.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["open settings", "show settings", "windows settings"]):
+                    print("⚡ Fast-Path Interceptor: Settings")
+                    self.execute_action({"action": "shortcut", "target": "windows+i"})
+                    self.comm.show_subtitle.emit("Settings opened.")
+                    self.speak("Settings opened.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["action center", "action panel", "open action panel"]):
+                    print("⚡ Fast-Path Interceptor: Action Center")
+                    self.execute_action({"action": "shortcut", "target": "windows+a"})
+                    self.comm.show_subtitle.emit("Action panel.")
+                    self.speak("Action panel.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["show desktop", "go to desktop", "hide everything"]):
+                    print("⚡ Fast-Path Interceptor: Desktop")
+                    self.execute_action({"action": "shortcut", "target": "windows+d"})
+                    self.comm.show_subtitle.emit("Desktop.")
+                    self.speak("Desktop.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["play music", "pause music", "stop music", "play media"]):
+                    print("⚡ Fast-Path Interceptor: Play/Pause Media")
+                    self.execute_action({"action": "shortcut", "target": "play/pause media"})
+                    self.comm.show_subtitle.emit("Done.")
+                    self.speak("Done.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["next track", "next song", "skip song"]):
+                    print("⚡ Fast-Path Interceptor: Next Track")
+                    self.execute_action({"action": "shortcut", "target": "next track"})
+                    self.comm.show_subtitle.emit("Done.")
+                    self.speak("Done.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["previous track", "last song", "previous song"]):
+                    print("⚡ Fast-Path Interceptor: Previous Track")
+                    self.execute_action({"action": "shortcut", "target": "previous track"})
+                    self.comm.show_subtitle.emit("Done.")
+                    self.speak("Done.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["new tab", "open a new tab"]):
+                    print("⚡ Fast-Path Interceptor: New Tab")
+                    self.execute_action({"action": "shortcut", "target": "ctrl+t"})
+                    self.comm.show_subtitle.emit("Tab opened.")
+                    self.speak("Tab opened.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["close tab", "close this tab", "close the tab"]):
+                    print("⚡ Fast-Path Interceptor: Close Tab")
+                    self.execute_action({"action": "shortcut", "target": "ctrl+w"})
+                    self.comm.show_subtitle.emit("Tab closed.")
+                    self.speak("Tab closed.", return_to_idle=True)
+                    return
+                elif any(phrase in self.raw_spoken_text for phrase in ["reopen tab", "restore tab"]):
+                    print("⚡ Fast-Path Interceptor: Reopen Tab")
+                    self.execute_action({"action": "shortcut", "target": "ctrl+shift+t"})
+                    self.comm.show_subtitle.emit("Tab restored.")
+                    self.speak("Tab restored.", return_to_idle=True)
+                    return
+                elif any(
                     phrase in self.raw_spoken_text
                     for phrase in ["move left", "go left", "slide left", "shift left"]
                 ):
@@ -864,9 +1019,7 @@ class ModernClippy(QWidget):
             think_start_time = time.time()
             parsed_data = self.parse_intent(command_text)
             think_time = time.time() - think_start_time
-            print(
-                f"⏱️  [PERFORMANCE] AURA Think Time (Ollama): {think_time:.2f} seconds"
-            )
+            print(f"⏱️  [PERFORMANCE] AURA Think Time (Ollama): {think_time:.2f} seconds")
 
             if not parsed_data:
                 return
@@ -895,9 +1048,11 @@ class ModernClippy(QWidget):
                     }
                 ]
 
-            commands = self.merge_commands(
-                self.normalize_commands(commands), self.extract_commands_from_raw()
-            )
+            llm_cmds = self.normalize_commands(commands)
+            if llm_cmds:
+                commands = self.merge_commands(llm_cmds, [])
+            else:
+                commands = self.merge_commands([], self.extract_commands_from_raw())
 
             if not commands:
                 raw_lower = self.raw_spoken_text.lower().strip()
@@ -982,7 +1137,7 @@ class ModernClippy(QWidget):
             called_speak = True
 
             self.execute_commands(commands)
-
+            
             total_time = time.time() - start_exec_time
             print(f"⏱️  [PERFORMANCE] Total Execution Time: {total_time:.2f} seconds")
         except Exception as e:
@@ -1275,6 +1430,20 @@ class ModernClippy(QWidget):
     def prune_conflicting_commands(self, commands):
         raw_lower = self.raw_spoken_text.lower().strip()
 
+        # 0. ANTI-HALLUCINATION: The LLM sometimes aggressively bundles shortcuts (e.g., muting and minimizing when locking).
+        valid_commands = []
+        for cmd in commands:
+            if cmd.get("action") == "shortcut":
+                target = cmd.get("target", "")
+                if target == "volume mute" and not any(w in raw_lower for w in ["mute", "quiet", "shush", "silence"]):
+                    continue
+                if target == "windows+d" and not any(w in raw_lower for w in ["desktop", "hide", "minimize"]):
+                    continue
+                if target == "windows+shift+s" and not any(w in raw_lower for w in ["snip", "screenshot", "shot"]):
+                    continue
+            valid_commands.append(cmd)
+        commands = valid_commands
+
         # 1. LOCK SAFETY: If "windows+l" is in commands, or "lock" is in raw_lower:
         # we MUST remove any "shutdown_pc" or "exit" commands.
         has_lock = any(
@@ -1466,7 +1635,6 @@ class ModernClippy(QWidget):
         if has_desktop:
             commands = [cmd for cmd in commands if cmd.get("action") == "shortcut"]
 
-        has_shutdown = any(cmd.get("action") == "shutdown_pc" for cmd in commands)
         # We no longer aggressively prune other commands if shutdown_pc is present
         # This allows multi-threading tests to pass and lets AURA execute safe commands before shutdown.
 
@@ -1578,6 +1746,7 @@ class ModernClippy(QWidget):
 
     def reply_for_commands(self, commands):
         parts = []
+        shortcut_added = False
         for cmd in commands:
             action = cmd.get("action", "")
             target = self.normalize_target(cmd.get("target", ""))
@@ -1598,18 +1767,20 @@ class ModernClippy(QWidget):
             elif action == "shutdown_pc":
                 parts.append("shutting down")
             elif action == "shortcut":
-                shortcut_replies = [
-                    "done",
-                    "here you go",
-                    "sure",
-                    "as you asked",
-                    "consider it done",
-                    "got it",
-                    "on it",
-                ]
-                import random
+                if not shortcut_added:
+                    shortcut_replies = [
+                        "done",
+                        "here you go",
+                        "sure",
+                        "as you asked",
+                        "consider it done",
+                        "got it",
+                        "on it",
+                    ]
+                    import random
 
-                parts.append(random.choice(shortcut_replies))
+                    parts.append(random.choice(shortcut_replies))
+                    shortcut_added = True
             elif action == "check_vitals":
                 parts.append("checking vitals")
             elif action == "analyze_clipboard":
@@ -2352,36 +2523,55 @@ Be helpful, natural, and conversational. Avoid cringe text effects or markdown h
                 self.speak(msg)
 
 
+
 if __name__ == "__main__":
+    import ctypes
+    import os
+    try:
+        myappid = u'mycompany.aura.desktop.1.0.0'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception:
+        pass
+        
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
+    
+    icon_path = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "aura_icon.ico")
+    if os.path.exists(icon_path):
+        from PyQt6.QtGui import QIcon
+        app.setWindowIcon(QIcon(icon_path))
 
-    avatar = ModernClippy()
-    avatar.show()
+    if "--hidden" in sys.argv:
+        # Launch AURA background daemon
+        app.setQuitOnLastWindowClosed(False)
+        avatar = ModernClippy()
+        avatar.show()
 
-    # Play a randomized startup greeting
-    import random
+        # Play a randomized startup greeting
+        import random
+        from PyQt6.QtCore import QTimer
+        greetings = [
+            "Hello! Ready to be productive?",
+            "AURA systems online. How can I help?",
+            "Hello, I am AURA, your desktop companion.",
+            "Good to see you! All systems are green.",
+            "Boot sequence complete. Ready when you are."
+        ]
+        greeting = random.choice(greetings)
+        
+        def play_greeting():
+            avatar.comm.change_state.emit("speaking")
+            avatar.comm.show_subtitle.emit(greeting)
+            avatar.speak(greeting)
+            
+        QTimer.singleShot(1500, play_greeting)
 
-    from PyQt6.QtCore import QTimer
-
-    greetings = [
-        "Hello! Ready to be productive?",
-        "AURA systems online. How can I help?",
-        "Hello, I am AURA, your desktop companion.",
-        "Good to see you! All systems are green.",
-        "Boot sequence complete. Ready when you are.",
-    ]
-    greeting = random.choice(greetings)
-
-    def play_greeting():
-        avatar.comm.change_state.emit("speaking")
-        avatar.comm.show_subtitle.emit(greeting)
-        avatar.speak(greeting)
-
-    QTimer.singleShot(1500, play_greeting)
-
-    print("-" * 40)
-    print("🚀 DESKTOP ENGINE ASSISTANT IS ONLINE")
-    print("-" * 40)
+        print("-" * 40)
+        print("🚀 DESKTOP ENGINE ASSISTANT IS ONLINE")
+        print("-" * 40)
+    else:
+        # Launch standalone settings window (from Desktop shortcut)
+        app.setQuitOnLastWindowClosed(True)
+        settings_win = SettingsWindow(is_standalone=True)
+        settings_win.show()
 
     sys.exit(app.exec())
