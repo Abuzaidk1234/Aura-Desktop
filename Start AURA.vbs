@@ -1,3 +1,4 @@
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "E:\Clippy"
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+WshShell.CurrentDirectory = objFSO.GetParentFolderName(WScript.ScriptFullName)
 WshShell.Run "pythonw main.py", 0, False

@@ -20,10 +20,6 @@ import ollama
 import psutil
 import pyperclip
 import speech_recognition as sr
-
-# --- Configuration and Core Imports ---
-from config import CONFIG, CONFIG_FILE, load_config
-from core.signals import Communicate
 from PyQt6.QtCore import (
     QEasingCurve,
     QEvent,
@@ -51,6 +47,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+# --- Configuration and Core Imports ---
+from config import CONFIG, CONFIG_FILE, load_config
+from core.signals import Communicate
 from ui.components import DragFilter, PomodoroWindow, ShutdownOSDWindow
 
 
@@ -488,7 +488,9 @@ class ModernClippy(QWidget):
 
     def verify_and_emit(self, required_vk_codes, signal_or_func):
         import ctypes
+
         import keyboard
+
         for vk in required_vk_codes:
             # 0x8000 indicates the key is physically held down right now
             if not (ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000):
@@ -496,7 +498,7 @@ class ModernClippy(QWidget):
                 # We clear the memory to heal it and ignore this trigger
                 keyboard._pressed_events.clear()
                 return
-                
+
         if hasattr(signal_or_func, "emit"):
             signal_or_func.emit()
         else:
@@ -518,11 +520,32 @@ class ModernClippy(QWidget):
                 keyboard.unhook_all()
                 keyboard._pressed_events.clear()
                 time.sleep(0.5)
-                keyboard.add_hotkey("ctrl+shift+c", lambda: self.verify_and_emit([0x11, 0x10, 0x43], self.comm.toggle_click.emit))
-                keyboard.add_hotkey("ctrl+space", lambda: self.verify_and_emit([0x11, 0x20], self.comm.wake_up.emit))
-                keyboard.add_hotkey("ctrl+shift+space", lambda: self.verify_and_emit([0x11, 0x10, 0x20], self.comm.open_text_prompt.emit))
-                keyboard.add_hotkey("ctrl+shift+alt+q", lambda: self.verify_and_emit([0x11, 0x10, 0x12, 0x51], self.comm.exit_app.emit))
-                keyboard.add_hotkey("ctrl+shift+a", lambda: self.verify_and_emit([0x11, 0x10, 0x41], self.panic_abort))
+                keyboard.add_hotkey(
+                    "ctrl+shift+c",
+                    lambda: self.verify_and_emit(
+                        [0x11, 0x10, 0x43], self.comm.toggle_click.emit
+                    ),
+                )
+                keyboard.add_hotkey(
+                    "ctrl+space",
+                    lambda: self.verify_and_emit([0x11, 0x20], self.comm.wake_up.emit),
+                )
+                keyboard.add_hotkey(
+                    "ctrl+shift+space",
+                    lambda: self.verify_and_emit(
+                        [0x11, 0x10, 0x20], self.comm.open_text_prompt.emit
+                    ),
+                )
+                keyboard.add_hotkey(
+                    "ctrl+shift+alt+q",
+                    lambda: self.verify_and_emit(
+                        [0x11, 0x10, 0x12, 0x51], self.comm.exit_app.emit
+                    ),
+                )
+                keyboard.add_hotkey(
+                    "ctrl+shift+a",
+                    lambda: self.verify_and_emit([0x11, 0x10, 0x41], self.panic_abort),
+                )
                 print("✅ Hotkeys registered successfully!")
                 break
             except Exception as e:
@@ -782,6 +805,9 @@ class ModernClippy(QWidget):
     def execute_intent(self, command_text):
         called_speak = False
         try:
+            import time
+
+            start_exec_time = time.time()
             current_time = time.time()
             cooldown = CONFIG.get("debounce_cooldown_seconds", 2.0)
             if (
@@ -835,7 +861,12 @@ class ModernClippy(QWidget):
                     self.speak("Moving right.", return_to_idle=True)
                     return
 
+            think_start_time = time.time()
             parsed_data = self.parse_intent(command_text)
+            think_time = time.time() - think_start_time
+            print(
+                f"⏱️  [PERFORMANCE] AURA Think Time (Ollama): {think_time:.2f} seconds"
+            )
 
             if not parsed_data:
                 return
@@ -951,6 +982,9 @@ class ModernClippy(QWidget):
             called_speak = True
 
             self.execute_commands(commands)
+
+            total_time = time.time() - start_exec_time
+            print(f"⏱️  [PERFORMANCE] Total Execution Time: {total_time:.2f} seconds")
         except Exception as e:
             print(f"❌ Intent Execution Error: {e}")
         finally:
@@ -2327,21 +2361,23 @@ if __name__ == "__main__":
 
     # Play a randomized startup greeting
     import random
+
     from PyQt6.QtCore import QTimer
+
     greetings = [
         "Hello! Ready to be productive?",
         "AURA systems online. How can I help?",
         "Hello, I am AURA, your desktop companion.",
         "Good to see you! All systems are green.",
-        "Boot sequence complete. Ready when you are."
+        "Boot sequence complete. Ready when you are.",
     ]
     greeting = random.choice(greetings)
-    
+
     def play_greeting():
         avatar.comm.change_state.emit("speaking")
         avatar.comm.show_subtitle.emit(greeting)
         avatar.speak(greeting)
-        
+
     QTimer.singleShot(1500, play_greeting)
 
     print("-" * 40)
