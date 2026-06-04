@@ -108,7 +108,7 @@ begin
         begin
           // After installing, pull the llama3.2 model
           DownloadPage.SetText('Downloading llama3.2 model (this may take a few minutes)...', '');
-          Exec('cmd.exe', '/c ollama pull llama3.2', '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
+          Exec(ExpandConstant('{localappdata}\Programs\Ollama\ollama.exe'), 'pull llama3.2', '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
         end
         else
         begin
