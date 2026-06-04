@@ -1,6 +1,6 @@
 # A.U.R.A: Advanced Utility & Resource Assistant 🌌
 
-Welcome to AURA, a cutting-edge, locally-run AI desktop assistant built to be fast, beautiful, and relentlessly helpful. Unlike generic clunky chat boxes, AURA lives elegantly on your desktop as an interactive 3D avatar with a gorgeous "liquid glass" UI. 
+Welcome to AURA, a cutting-edge, locally-run AI desktop assistant built to be fast, beautiful, and relentlessly helpful. Unlike generic clunky chat boxes, AURA lives elegantly on your desktop as an interactive 3D avatar with a gorgeous "Frosted Glass" UI. 
 
 Powered entirely by local AI models (via Ollama) and a Hybrid Voice Engine, AURA respects your privacy while delivering incredible capabilities regardless of your internet connection. 
 
@@ -19,7 +19,7 @@ AURA is built on an incredible blend of technologies:
 *   **Hybrid Voice Engines:** Uses Google Speech Recognition and Edge TTS (Online), but seamlessly falls back to the blazing-fast C++ `faster-whisper` and `piper-tts` engines when your internet drops.
 
 ## ✨ Key Features
-- **3D Avatar & Liquid Glass UI**: A beautiful, transparent overlay that sits natively on your Windows desktop. 
+- **3D Avatar & Frosted Glass UI**: A beautiful, transparent overlay that sits natively on your Windows desktop. 
 - **Voice & Text Interactions**: Wake AURA with your voice (say "Hey Aura") or use lightning-fast keyboard shortcuts (`Ctrl+Space` for voice, `Ctrl+Shift+Space` for text).
 - **Deep Windows Integration**: AURA can launch apps, search the web, manage active windows, and execute system-level hotkeys without you ever touching the mouse.
 - **Context-Aware Superpowers**:
