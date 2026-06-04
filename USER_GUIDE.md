@@ -115,7 +115,7 @@ AURA can read whatever you currently have copied to your clipboard.
 
 ## 6. System-Wide Frosted Aesthetics (Mica Explorer Setup)
 
-If you love the blurred, liquid-glass aesthetic used inside AURA's UI, you can force this look across all your other Windows applications.
+If you love the blurred, Frosted-glass aesthetic used inside AURA's UI, you can force this look across all your other Windows applications.
 To do this, you can install **Mica For Everyone (MFE)** or its successor, **Mica Explorer**.
 
 **How to set up Mica Explorer:**
